@@ -1,193 +1,141 @@
 import streamlit as st
+from google import genai
 
 st.set_page_config(
-    page_title="NoteFlash AI - Instant Study-to-Anki Converter",
+    page_title="NoteFlash AI - AI Study Converter",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Modern UI/UX Design
+# Custom Styling
 st.markdown("""
 <style>
-    /* Google Fonts Import */
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', sans-serif;
-    }
-
-    /* Gradient Background Glow */
-    .stApp {
-        background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 50%, #090d16 100%);
-    }
-
-    /* Hide Streamlit Header & Branding */
+    html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .stApp { background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 50%, #090d16 100%); }
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-
-    /* Hero Section Styling */
-    .hero-badge {
-        display: inline-block;
-        padding: 6px 16px;
-        background: rgba(99, 102, 241, 0.15);
-        border: 1px solid rgba(129, 140, 248, 0.3);
-        border-radius: 20px;
-        color: #818cf8;
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-bottom: 12px;
-    }
-
     .hero-title {
-        font-size: 2.8rem;
-        font-weight: 800;
+        font-size: 2.5rem; font-weight: 800;
         background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        line-height: 1.2;
-        margin-bottom: 12px;
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        margin-bottom: 8px;
     }
-
-    .hero-subtitle {
-        color: #94a3b8;
-        font-size: 1.15rem;
-        margin-bottom: 24px;
-    }
-
-    /* Card Containers */
-    div[data-testid="stForm"], div.css-1r6slb0, div.stTextArea, div.stTextInput {
+    .hero-subtitle { color: #94a3b8; font-size: 1.05rem; margin-bottom: 20px; }
+    div[data-testid="stForm"], div.stTextArea, div.stTextInput {
         background: rgba(30, 41, 59, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
-        backdrop-filter: blur(12px);
     }
-
-    /* Metric Box */
-    .metric-card {
-        background: rgba(30, 41, 59, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-        border-radius: 10px;
-        padding: 16px;
-        text-align: center;
-    }
-
-    .metric-val {
-        font-size: 1.6rem;
-        font-weight: 700;
-        color: #6366f1;
-    }
-
-    .metric-lbl {
-        font-size: 0.8rem;
-        color: #64748b;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
-
-    /* Button Styling */
     .stButton>button {
-        width: 100%;
-        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-        color: #ffffff;
-        font-weight: 600;
-        font-size: 1rem;
-        padding: 12px 24px;
-        border-radius: 8px;
-        border: none;
-        box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
-        transition: all 0.2s ease;
-    }
-
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.5);
+        width: 100%; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        color: #ffffff; font-weight: 600; padding: 12px; border-radius: 8px; border: none;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar UI
+# Sidebar Configuration
 with st.sidebar:
     st.markdown("### ⚡ **NoteFlash AI**")
-    st.caption("v1.2 • Production Ready")
+    st.caption("AI-Powered Edition")
     st.markdown("---")
     
-    st.markdown("#### 📖 How It Works")
+    # API Key Input for Streamlit secrets or manual entry
+    api_key_input = st.text_input("Gemini API Key", type="password", help="Get a free key from Google AI Studio")
+    st.markdown("---")
+    st.markdown("#### 🤖 AI Mode vs Manual Mode")
     st.markdown("""
-    1. **Format Input**  
-       Separate your front and back card using a pipe (`|`).
-       `Question | Answer`
-    2. **Convert & Export**  
-       Name your file and generate the tab-separated dataset.
-    3. **Import to Anki**  
-       Open Anki Desktop → `File` → `Import` and select your deck.
+    * **AI Mode:** Paste unformatted notes or text chapters. Gemini automatically scans and builds flashcards.
+    * **Manual Mode:** Standard `Front | Back` pipe syntax.
     """)
-    
-    st.markdown("---")
-    st.markdown("#### 💡 Pro Tip")
-    st.info("You can paste AI outputs directly from ChatGPT, Claude, or Gemini into the editor!")
 
-# Main Content Layout
-main_col, side_col = st.columns([2.5, 1], gap="large")
+# Main Content
+main_col, side_col = st.columns([2.2, 1], gap="large")
 
 with main_col:
-    st.markdown('<div class="hero-badge">STUDY PRODUCTIVITY TOOL</div>', unsafe_allow_html=True)
-    st.markdown('<h1 class="hero-title">Transform Study Notes into Anki Decks Instantly</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">Convert raw summaries and pipe-separated notes into flawless Anki flashcards in seconds.</p>', unsafe_allow_html=True)
+    st.markdown('<h1 class="hero-title">Smart Study-to-Anki Converter</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">Transform messy textbook chapters or raw notes into structured flashcards instantly.</p>', unsafe_allow_html=True)
 
-    default_text = "What is Newton's Second Law? | F = ma\nWhat is the powerhouse of the cell? | Mitochondria\nWhat is the speed of light? | 3 x 10^8 m/s"
-    
-    notes = st.text_area("Input Study Notes", value=default_text, height=220, help="Format: Front Text | Back Text")
+    mode = st.radio("Select Conversion Engine", ["✨ AI Auto-Extract (Gemini)", "✍️ Manual Pipe Format (`Q | A`)"], horizontal=True)
 
-    col_name, col_btn = st.columns([1.5, 1], gap="medium")
-    with col_name:
-        filename = st.text_input("Deck Filename", value="physics_deck.txt", label_visibility="visible")
-    
-    with col_btn:
-        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-        generate_clicked = st.button("Generate Deck ✨", type="primary")
-
-    if generate_clicked:
-        if notes.strip():
-            lines = notes.strip().split("\n")
-            anki_lines = []
-            for line in lines:
-                if "|" in line:
-                    parts = line.split("|", 1)
-                    q = parts[0].strip()
-                    a = parts[1].strip()
-                    anki_lines.append(f"{q}\t{a}")
+    if "AI" in mode:
+        raw_text = st.text_area("Paste Raw Study Content / Chapter Text", height=200, placeholder="Paste a Wikipedia article, textbook summary, or class notes here...")
+        filename = st.text_input("Deck Filename", value="ai_smart_deck.txt")
+        
+        if st.button("Generate Cards with AI ✨", type="primary"):
+            key_to_use = api_key_input or (st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else None)
             
-            if anki_lines:
-                output_data = "\n".join(anki_lines)
-                st.success(f"Successfully generated {len(anki_lines)} cards!")
-                st.download_button(
-                    label="📥 Download .txt File",
-                    data=output_data,
-                    file_name=filename if filename.endswith(".txt") else f"{filename}.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
+            if not key_to_use:
+                st.error("Please enter your Gemini API Key in the sidebar.")
+            elif not raw_text.strip():
+                st.warning("Please paste some text content first.")
             else:
-                st.error("No valid pipe lines found. Ensure your notes use the format: Front | Back")
-        else:
-            st.warning("Please paste your study notes before generating.")
+                with st.spinner("🤖 Gemini is analyzing text and building flashcards..."):
+                    try:
+                        client = genai.Client(api_key=key_to_use)
+                        prompt = f"""You are an expert study assistant. Read the text below and extract high-yield flashcards.
+                        Format EACH flashcard strictly on a new line using a pipe symbol:
+                        Front of Card (Question/Concept) | Back of Card (Answer/Explanation)
+                        Do not include extra headings or bullet symbols, just the raw pairs.
+                        
+                        Text content:
+                        {raw_text[:12000]}"""
+                        
+                        response = client.models.generate_content(
+                            model="gemini-2.5-flash",
+                            contents=prompt
+                        )
+                        
+                        ai_output = response.text.strip()
+                        anki_lines = []
+                        for line in ai_output.split("\n"):
+                            if "|" in line:
+                                anki_lines.append(line.strip())
+                        
+                        if anki_lines:
+                            final_data = "\n".join(anki_lines)
+                            st.success(f"Successfully extracted {len(anki_lines)} AI flashcards!")
+                            st.download_button(
+                                label="📥 Download AI Anki Deck (.txt)",
+                                data=final_data,
+                                file_name=filename if filename.endswith(".txt") else f"{filename}.txt",
+                                mime="text/plain",
+                                use_container_width=True
+                            )
+                        else:
+                            st.error("AI couldn't format the output properly. Try providing more structured text.")
+                    except Exception as e:
+                        st.error(f"Generation error: {e}")
+
+    else:
+        notes = st.text_area("Input Manual Notes", value="What is Ohm's Law? | V = IR\nForce equals what? | Mass times acceleration", height=200)
+        filename = st.text_input("Deck Filename", value="manual_deck.txt")
+        
+        if st.button("Generate Deck (.txt)", type="primary"):
+            if notes.strip():
+                lines = notes.strip().split("\n")
+                anki_lines = []
+                for line in lines:
+                    if "|" in line:
+                        parts = line.split("|", 1)
+                        anki_lines.append(f"{parts[0].strip()}\t{parts[1].strip()}")
+                
+                if anki_lines:
+                    output_data = "\n".join(anki_lines)
+                    st.success(f"Successfully formatted {len(anki_lines)} cards!")
+                    st.download_button(
+                        label="📥 Download .txt File",
+                        data=output_data,
+                        file_name=filename if filename.endswith(".txt") else f"{filename}.txt",
+                        mime="text/plain",
+                        use_container_width=True
+                    )
+                else:
+                    st.error("No valid pipe lines found. Use format: Front | Back")
+            else:
+                st.warning("Please enter your notes.")
 
 with side_col:
-    st.markdown("#### 📊 App Stats")
-    
-    st.markdown("""
-    <div class="metric-card" style="margin-bottom: 12px;">
-        <div class="metric-val">100%</div>
-        <div class="metric-lbl">Anki Compatibility</div>
-    </div>
-    <div class="metric-card" style="margin-bottom: 12px;">
-        <div class="metric-val">Instant</div>
-        <div class="metric-lbl">Conversion Speed</div>
-    </div>
-    <div class="metric-card">
-        <div class="metric-val">UTF-8</div>
-        <div class="metric-lbl">Encoding Standard</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("#### 💡 Pro Tips")
+    st.info("With AI Mode enabled, you can paste full textbook chapters or PDF summaries and let Gemini handle the heavy lifting of question creation.")
