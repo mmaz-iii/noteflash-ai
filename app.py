@@ -7,231 +7,279 @@ import genanki
 import random
 
 st.set_page_config(
-    page_title="NoteFlash AI - Pro Suite",
+    page_title="NoteFlash AI — Dashboard",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom High-End Styling & Card Flip CSS
+# Custom Design System (Extracted from v0 HTML Artifact)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
-    html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
-    .stApp { background: radial-gradient(circle at 50% 0%, #1e1b4b 0%, #0f172a 50%, #090d16 100%); }
+    
+    :root {
+        --bg-1: #090d16;
+        --bg-2: #1e1b4b;
+        --glass: rgba(255, 255, 255, 0.04);
+        --glass-strong: rgba(255, 255, 255, 0.07);
+        --border: rgba(255, 255, 255, 0.09);
+        --border-strong: rgba(255, 255, 255, 0.16);
+        --text: #e6e8f2;
+        --muted: #8b90a8;
+        --indigo: #6366f1;
+        --indigo-light: #a5b4fc;
+        --success: #34d399;
+        --radius: 16px;
+    }
+
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        color: var(--text);
+    }
+
+    .stApp {
+        background: linear-gradient(135deg, var(--bg-1) 0%, #0f1229 45%, var(--bg-2) 100%);
+        background-attachment: fixed;
+    }
+
     header {visibility: hidden;}
     footer {visibility: hidden;}
-    
-    .hero-title {
-        font-size: 2.3rem; font-weight: 800;
-        background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        margin-bottom: 6px;
-    }
-    .hero-subtitle { color: #94a3b8; font-size: 1rem; margin-bottom: 16px; }
 
-    div[data-testid="stForm"], div.stTextArea, div.stTextInput, div.stFileUploader, div[data-testid="stDataFrame"] {
-        background: rgba(30, 41, 59, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 12px;
-        backdrop-filter: blur(10px);
+    /* Glassmorphism Containers */
+    div[data-testid="stForm"], div.stTextArea, div.stTextInput, div.stFileUploader, div[data-testid="stDataFrame"], div.metric-container {
+        background: rgba(255, 255, 255, 0.04) !important;
+        border: 1px solid rgba(255, 255, 255, 0.09) !important;
+        border-radius: 16px !important;
+        backdrop-filter: blur(18px) !important;
+        -webkit-backdrop-filter: blur(18px) !important;
     }
 
+    /* Glowing Primary Button */
     .stButton>button {
-        width: 100%; background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
-        color: #ffffff; font-weight: 600; padding: 12px; border-radius: 8px; border: none;
-        box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.35);
+        width: 100%;
+        background: linear-gradient(180deg, #7174f5 0%, #5458e8 100%);
+        border: 1px solid rgba(165,180,252,0.5);
+        color: #fff;
+        font-weight: 600;
+        padding: 10px 16px;
+        border-radius: 12px;
+        box-shadow: 0 0 0 1px rgba(99,102,241,0.4), 0 0 24px rgba(99,102,241,0.45);
+        transition: all 0.2s ease;
     }
     
-    /* Card Flip Component */
+    .stButton>button:hover {
+        background: linear-gradient(180deg, #7f82f7 0%, #6064ee 100%);
+        box-shadow: 0 0 0 1px rgba(99,102,241,0.6), 0 0 36px rgba(99,102,241,0.7);
+        transform: translateY(-1px);
+    }
+
+    /* Card Flip Preview Component */
     .flashcard-container {
-        perspective: 1000px; width: 100%; height: 160px; margin-top: 10px; margin-bottom: 15px;
+        perspective: 1200px; width: 100%; aspect-ratio: 4 / 3; margin-top: 10px;
     }
     .flashcard-inner {
         position: relative; width: 100%; height: 100%; text-align: center;
-        transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer;
+        transition: transform 0.7s cubic-bezier(.2,.8,.2,1); transform-style: preserve-3d; cursor: pointer;
     }
     .flashcard-container:hover .flashcard-inner { transform: rotateY(180deg); }
-    .flashcard-front, .flashcard-back {
-        position: absolute; width: 100%; height: 100%;-webkit-backface-visibility: hidden;
-        backface-visibility: hidden; border-radius: 10px; display: flex; align-items: center;
-        justify-content: center; padding: 16px; font-size: 0.95rem; font-weight: 600;
-        border: 1px solid rgba(129, 140, 248, 0.3);
+    .face {
+        position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+        border-radius: 18px; padding: 22px; display: flex; flex-direction: column;
+        border: 1px solid rgba(255, 255, 255, 0.16);
     }
-    .flashcard-front { background: rgba(30, 41, 59, 0.8); color: #818cf8; }
-    .flashcard-back { background: rgba(49, 46, 129, 0.6); color: #e2e8f0; transform: rotateY(180deg); }
+    .face.front { background: linear-gradient(155deg, rgba(49,46,129,0.6), rgba(15,18,41,0.85)); box-shadow: 0 30px 60px -30px rgba(99,102,241,0.6); color: #818cf8; }
+    .face.back { background: linear-gradient(155deg, rgba(30,27,75,0.9), rgba(9,13,22,0.95)); transform: rotateY(180deg); box-shadow: 0 30px 60px -30px rgba(99,102,241,0.6); color: #d4d7ea; }
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar Configuration & Controls
+# Initialize Session States
+if 'cards_df' not in st.session_state:
+    st.session_state['cards_df'] = pd.DataFrame([
+        {"Front": "What does ATP stand for?", "Back": "Adenosine triphosphate — primary energy carrier.", "Tag": "biology", "Level": "Easy"},
+        {"Front": "Where does glycolysis occur?", "Back": "In the cytoplasm of the cell.", "Tag": "biology", "Level": "Medium"},
+        {"Front": "What is the time complexity of binary search?", "Back": "O(log n)", "Tag": "cs", "Level": "Medium"}
+    ])
+if 'total_generated' not in st.session_state:
+    st.session_state['total_generated'] = 1245
+
+# Sidebar Navigation Workspace
 with st.sidebar:
     st.markdown("### ⚡ **NoteFlash AI**")
-    st.caption("Pro Engine v3.0")
+    st.caption("v3.5 Pro Suite")
     st.markdown("---")
     
+    nav_choice = st.radio(
+        "WORKSPACE",
+        ["✨ Generator", "📚 My Decks", "📊 Study Stats", "⚙️ Settings"],
+        label_visibility="visible"
+    )
+    
+    st.markdown("---")
     api_key_input = st.text_input("Gemini API Key", type="password", help="Get free key from Google AI Studio")
-    st.markdown("---")
     
-    st.markdown("#### 🎛️ AI Difficulty & Style")
-    card_focus = st.selectbox("Content Focus", ["High-Yield Concepts & Formulas", "Definitions & Terminology", "Comprehensive Q&A"])
-    card_depth = st.select_slider("Extraction Depth", options=["Concise", "Balanced", "Exhaustive"], value="Balanced")
-    deck_name = st.text_input("Anki Deck Title", value="NoteFlash_Master_Deck")
+    st.markdown("---")
+    st.markdown("📦 **AI Credits**")
+    st.progress(62, text="620 / 1,000 Credits")
+    st.caption("Resets in 12 days")
+    st.button("Upgrade to Pro", type="primary")
 
-# Main Interface Layout
-main_col, side_col = st.columns([2.3, 1], gap="large")
+# MAIN VIEWS LOGIC
+if "Generator" in nav_choice:
+    # Top Metrics Row matching v0 design
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.metric("Total cards", st.session_state['total_generated'], "+48 this week")
+    with m2:
+        st.metric("Decks", "14", "+2 this week")
+    with m3:
+        st.metric("Study streak", "9d", "Personal best")
+    with m4:
+        st.metric("Retention", "87%", "+4.2%")
 
-with main_col:
-    st.markdown('<h1 class="hero-title">Professional Study-to-Anki Suite</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">Upload documents, inspect flashcards interactively, and export `.apkg` packages.</p>', unsafe_allow_html=True)
+    st.markdown("---")
 
-    input_mode = st.radio("Source Input", ["📄 PDF Document", "✨ AI Text Paste", "✍️ Manual Pipe Format"], horizontal=True)
+    col_main, col_preview = st.columns([1.6, 1], gap="large")
 
-    raw_content = None
-    uploaded_pdf = None
+    with col_main:
+        st.markdown("## Flashcard Generator")
+        st.caption("Turn notes, lectures, and PDFs into study-ready decks in seconds.")
 
-    if "PDF" in input_mode:
-        uploaded_pdf = st.file_uploader("Upload textbook chapter or study notes PDF", type=["pdf"])
-    elif "AI Text" in input_mode:
-        raw_content = st.text_area("Paste raw study content", height=150, placeholder="Paste your article or notes summary...")
-    else:
-        raw_content = st.text_input("Manual Cards (Front | Back)", value="What is Ohm's Law? | V = IR")
-        manual_area = st.text_area("", value="Power formula? | P = VI", height=100)
-        if manual_area:
-            raw_content = f"{raw_content}\n{manual_area}"
+        input_mode = st.radio("Source", ["📄 PDF Upload", "✨ AI Text Paste", "✍️ Manual Format"], horizontal=True)
 
-    if st.button("✨ Generate & Process Flashcards", type="primary"):
-        key_to_use = api_key_input or (st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else None)
-        
-        if not key_to_use and "Manual" not in input_mode:
-            st.error("Please provide your Gemini API Key in the sidebar.")
+        raw_content = None
+        uploaded_pdf = None
+
+        if "PDF" in input_mode:
+            uploaded_pdf = st.file_uploader("Drop a PDF here or browse", type=["pdf"], help="Lecture slides, textbook chapters up to 25 MB")
+        elif "AI Text" in input_mode:
+            raw_content = st.text_area("Paste notes", height=130, placeholder="Paste lecture notes or article...")
         else:
-            cards_data = []
+            raw_content = st.text_area("Manual Format (Front | Back)", value="What is Ohm's Law? | V = IR\nForce equals what? | Mass times acceleration", height=130)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            card_count = st.selectbox("Max Cards", [5, 10, 15, 20], index=1)
+        with c2:
+            card_style = st.selectbox("Style", ["Q & A", "Definition", "Cloze"])
+
+        deck_title = st.text_input("Anki Deck Title", value="NoteFlash_Master_Deck")
+
+        if st.button("Generate Cards ✨", type="primary"):
+            key_to_use = api_key_input or (st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else None)
             
-            if "Manual" in input_mode:
-                for line in raw_content.split("\n"):
-                    if "|" in line:
-                        parts = line.split("|", 1)
-                        cards_data.append({"Front": parts[0].strip(), "Back": parts[1].strip()})
+            if not key_to_use and "Manual" not in input_mode:
+                st.error("Please provide your Gemini API Key in the sidebar.")
             else:
-                # Multi-Step Processing Indicator using st.status
-                with st.status("Executing AI Extraction Pipeline...", expanded=True) as status:
-                    try:
-                        client = genai.Client(api_key=key_to_use)
-                        
-                        status.update(label="Step 1/3: Parsing document structure...", state="running")
-                        contents_payload = []
-                        
-                        if uploaded_pdf:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                                tmp.write(uploaded_pdf.getvalue())
-                                tmp_path = tmp.name
-                            uploaded_file_ref = client.files.upload(file=tmp_path)
-                            os.unlink(tmp_path)
-                            contents_payload = [uploaded_file_ref]
-                        else:
-                            contents_payload = [f"Text content: {raw_content[:12000]}"]
+                cards_data = []
+                if "Manual" in input_mode:
+                    for line in raw_content.split("\n"):
+                        if "|" in line:
+                            p = line.split("|", 1)
+                            cards_data.append({"Front": p[0].strip(), "Back": p[1].strip(), "Tag": "manual", "Level": "Medium"})
+                else:
+                    with st.status("🤖 Gemini processing documents...", expanded=True) as status:
+                        try:
+                            client = genai.Client(api_key=key_to_use)
+                            payload = []
+                            if uploaded_pdf:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                                    tmp.write(uploaded_pdf.getvalue())
+                                    tmp_path = tmp.name
+                                file_ref = client.files.upload(file=tmp_path)
+                                os.unlink(tmp_path)
+                                payload = [file_ref]
+                            else:
+                                payload = [f"Content: {raw_content[:12000]}"]
 
-                        status.update(label=f"Step 2/3: Applying AI filter ({card_focus} - {card_depth})...", state="running")
-                        prompt = f"""Extract high-yield flashcards focusing on {card_focus} with {card_depth.lower()} depth.
-                        Format EACH card strictly on a new line using a pipe symbol:
-                        Front of Card | Back of Card
-                        No extra formatting or markdown blocks."""
-                        
-                        response = client.models.generate_content(
-                            model="gemini-2.5-flash",
-                            contents=contents_payload + [prompt]
-                        )
+                            prompt = f"Extract high-yield flashcards in {card_style} format. Format EACH card on a new line using a pipe: Front | Back. No extra commentary."
+                            response = client.models.generate_content(model="gemini-2.5-flash", contents=payload + [prompt])
 
-                        status.update(label="Step 3/3: Formatting card datasets...", state="running")
-                        for line in response.text.strip().split("\n"):
-                            if "|" in line:
-                                p = line.split("|", 1)
-                                cards_data.append({"Front": p[0].strip(), "Back": p[1].strip()})
+                            for line in response.text.strip().split("\n"):
+                                if "|" in line:
+                                    p = line.split("|", 1)
+                                    cards_data.append({"Front": p[0].strip(), "Back": p[1].strip(), "Tag": "ai-gen", "Level": "Medium"})
+                            
+                            status.update(label="Extraction successful!", state="complete", expanded=False)
+                        except Exception as e:
+                            status.update(label="Generation failed.", state="error")
+                            st.error(f"Error: {e}")
 
-                        status.update(label="Flashcard extraction complete!", state="complete", expanded=False)
-                    except Exception as e:
-                        status.update(label="Pipeline failed.", state="error")
-                        st.error(f"Error: {e}")
+                if cards_data:
+                    st.session_state['cards_df'] = pd.DataFrame(cards_data)
+                    st.session_state['total_generated'] += len(cards_data)
+                    st.success(f"Generated {len(cards_data)} flashcards successfully!")
 
-            if cards_data:
-                st.session_state['cards_df'] = pd.DataFrame(cards_data)
-                st.success(f"Successfully generated {len(cards_data)} flashcards!")
-
-    # Interactive Card Editor Table & Preview
-    if 'cards_df' in st.session_state and not st.session_state['cards_df'].empty:
-        st.markdown("### ✏️ Interactive Card Editor")
-        st.caption("Review or edit your cards below before exporting.")
+    with col_preview:
+        st.markdown("### 👁️ Live Preview")
+        st.caption("Hover to flip card")
         
-        edited_df = st.data_editor(
-            st.session_state['cards_df'], 
-            num_rows="dynamic", 
-            use_container_width=True,
-            key="card_table"
-        )
-        st.session_state['cards_df'] = edited_df
+        sample_front = "What is the powerhouse of the cell?"
+        sample_back = "Mitochondria"
+        if not st.session_state['cards_df'].empty:
+            sample_front = st.session_state['cards_df'].iloc[0]['Front']
+            sample_back = st.session_state['cards_df'].iloc[0]['Back']
 
-        # Live Card Flip Preview Component
-        st.markdown("### 👁️ Live Card Flip Preview")
-        sample_row = edited_df.iloc[0] if len(edited_df) > 0 else {"Front": "Question", "Back": "Answer"}
         st.markdown(f"""
         <div class="flashcard-container">
             <div class="flashcard-inner">
-                <div class="flashcard-front"><b>Q:</b>&nbsp; {sample_row['Front']}</div>
-                <div class="flashcard-back"><b>A:</b>&nbsp; {sample_row['Back']}</div>
+                <div class="face front">
+                    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em;">Question</div>
+                    <div style="flex:1; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:600; text-align:center;">{sample_front}</div>
+                    <div style="font-size:11px; color:var(--muted);">Tap to reveal answer</div>
+                </div>
+                <div class="face back">
+                    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:#a5b4fc;">Answer</div>
+                    <div style="flex:1; display:flex; align-items:center; justify-content:center; font-size:15px; text-align:center;">{sample_back}</div>
+                    <div style="font-size:11px; color:var(--muted);">Tap to see question</div>
+                </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-
-        # Export options (.apkg and .txt)
-        col_dl1, col_dl2 = st.columns(2)
         
-        with col_dl1:
-            # Generate .apkg Package
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Export Actions (.apkg and .txt)
+        if not st.session_state['cards_df'].empty:
             deck_id = random.randrange(1 << 30, 1 << 31)
             model_id = random.randrange(1 << 30, 1 << 31)
-            
-            my_model = genanki.Model(
-                model_id, 'NoteFlash Pro Model',
-                fields=[{'name': 'Front'}, {'name': 'Back'}],
-                templates=[{
-                    'name': 'Card 1',
-                    'qfmt': '{{Front}}',
-                    'afmt': '{{FrontSide}}<hr id="answer">{{Back}}',
-                }]
-            )
-            my_deck = genanki.Deck(deck_id, deck_name)
-            for _, row in edited_df.iterrows():
+            my_model = genanki.Model(model_id, 'NoteFlash Pro Model', fields=[{'name': 'Front'}, {'name': 'Back'}], templates=[{'name': 'Card 1', 'qfmt': '{{Front}}', 'afmt': '{{FrontSide}}<hr id="answer">{{Back}}'}])
+            my_deck = genanki.Deck(deck_id, deck_title)
+            for _, row in st.session_state['cards_df'].iterrows():
                 my_deck.add_note(genanki.Note(model=my_model, fields=[row['Front'], row['Back']]))
             
-            pkg_path = f"{deck_name}.apkg"
+            pkg_path = f"{deck_title}.apkg"
             genanki.Package(my_deck).write_to_file(pkg_path)
             
             with open(pkg_path, "rb") as f:
-                st.download_button(
-                    label="📥 Download Native .apkg Deck",
-                    data=f,
-                    file_name=pkg_path,
-                    mime="application/octet-stream",
-                    use_container_width=True
-                )
+                st.download_button("📥 Download Native .apkg Package", f, file_name=pkg_path, mime="application/octet-stream", use_container_width=True)
 
-        with col_dl2:
-            txt_data = "\n".join([f"{r['Front']}\t{r['Back']}" for _, r in edited_df.iterrows()])
-            st.download_button(
-                label="📥 Download Tab-Separated .txt",
-                data=txt_data,
-                file_name=f"{deck_name}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
+    # Interactive Deck Editor Table
+    if not st.session_state['cards_df'].empty:
+        st.markdown("---")
+        st.markdown("### ✏️ Deck Editor")
+        st.caption("Click any cell to edit • Add or remove rows dynamically")
+        edited_df = st.data_editor(st.session_state['cards_df'], num_rows="dynamic", use_container_width=True, key="main_editor")
+        st.session_state['cards_df'] = edited_df
 
-with side_col:
-    st.markdown("#### 📊 Export Analytics")
-    if 'cards_df' in st.session_state and not st.session_state['cards_df'].empty:
-        total_cards = len(st.session_state['cards_df'])
-        est_time = round(total_cards * 0.75) # ~45 seconds saved per card vs manual typing
-        st.metric("Total Cards Generated", total_cards)
-        st.metric("Est. Study Time Saved", f"{est_time} mins")
-        st.metric("Deck Format", "UTF-8 / Anki Ready")
-    else:
-        st.info("Generate cards to view session analytics and stats.")
+elif "My Decks" in nav_choice:
+    st.markdown("### 📚 Saved Decks")
+    st.info("Your archived Anki packages ready for download.")
+    st.markdown("""
+    * 🧬 **Biology Chapter 4 - Cell Structure** (84 cards • `.apkg`)
+    * ⚡ **Physics Grade 10 - Electricity** (112 cards • `.apkg`)
+    * 📐 **Mathematics - Trigonometry Formulas** (45 cards • `.apkg`)
+    """)
+
+elif "Study Stats" in nav_choice:
+    st.markdown("### 📊 Analytics & Retention")
+    st.metric("Overall Mastery Score", "91.4%", "+2.1% this month")
+    st.metric("Total Study Hours", "28.5 hrs")
+    st.success("You are in the top 5% of active students this week!")
+
+else:
+    st.markdown("### ⚙️ Settings")
+    st.text_input("Default Deck Author", value="Muhammed Mazin")
+    st.selectbox("Export Format", ["Anki Package (.apkg)", "Tab-Separated (.txt)"])
+    st.toggle("Dark Mode Glow Effects", value=True)
+    st.button("Save Preferences")
