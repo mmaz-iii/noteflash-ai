@@ -1,5 +1,7 @@
 import streamlit as st
 from google import genai
+import tempfile
+import os
 
 st.set_page_config(
     page_title="NoteFlash AI - AI Study Converter",
@@ -23,7 +25,7 @@ st.markdown("""
         margin-bottom: 8px;
     }
     .hero-subtitle { color: #94a3b8; font-size: 1.05rem; margin-bottom: 20px; }
-    div[data-testid="stForm"], div.stTextArea, div.stTextInput {
+    div[data-testid="stForm"], div.stTextArea, div.stTextInput, div.stFileUploader {
         background: rgba(30, 41, 59, 0.5);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
@@ -38,16 +40,16 @@ st.markdown("""
 # Sidebar Configuration
 with st.sidebar:
     st.markdown("### ⚡ **NoteFlash AI**")
-    st.caption("AI-Powered Edition")
+    st.caption("AI Document Engine v2.0")
     st.markdown("---")
     
-    # API Key Input for Streamlit secrets or manual entry
     api_key_input = st.text_input("Gemini API Key", type="password", help="Get a free key from Google AI Studio")
     st.markdown("---")
-    st.markdown("#### 🤖 AI Mode vs Manual Mode")
+    st.markdown("#### 🚀 Conversion Modes")
     st.markdown("""
-    * **AI Mode:** Paste unformatted notes or text chapters. Gemini automatically scans and builds flashcards.
-    * **Manual Mode:** Standard `Front | Back` pipe syntax.
+    * **📄 PDF Upload:** Upload a textbook chapter or lecture notes PDF; Gemini reads it natively.
+    * **✨ AI Text:** Paste raw text extracts.
+    * **✍️ Manual:** Classic pipe format (`Q | A`).
     """)
 
 # Main Content
@@ -55,13 +57,73 @@ main_col, side_col = st.columns([2.2, 1], gap="large")
 
 with main_col:
     st.markdown('<h1 class="hero-title">Smart Study-to-Anki Converter</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="hero-subtitle">Transform messy textbook chapters or raw notes into structured flashcards instantly.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="hero-subtitle">Upload PDFs or paste notes to instantly generate production-ready Anki flashcards.</p>', unsafe_allow_html=True)
 
-    mode = st.radio("Select Conversion Engine", ["✨ AI Auto-Extract (Gemini)", "✍️ Manual Pipe Format (`Q | A`)"], horizontal=True)
+    mode = st.radio("Select Input Mode", ["📄 Upload PDF Document", "✨ AI Text Extraction", "✍️ Manual Pipe Format"], horizontal=True)
 
-    if "AI" in mode:
-        raw_text = st.text_area("Paste Raw Study Content / Chapter Text", height=200, placeholder="Paste a Wikipedia article, textbook summary, or class notes here...")
-        filename = st.text_input("Deck Filename", value="ai_smart_deck.txt")
+    # 1. PDF UPLOAD MODE
+    if "PDF" in mode:
+        uploaded_pdf = st.file_uploader("Upload your study guide or textbook chapter", type=["pdf"])
+        filename = st.text_input("Deck Filename", value="pdf_anki_deck.txt")
+        
+        if st.button("Extract Flashcards from PDF ✨", type="primary"):
+            key_to_use = api_key_input or (st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else None)
+            
+            if not key_to_use:
+                st.error("Please provide your Gemini API Key in the sidebar.")
+            elif uploaded_pdf is None:
+                st.warning("Please upload a PDF file first.")
+            else:
+                with st.spinner("📄 Uploading and analyzing document with Gemini..."):
+                    try:
+                        client = genai.Client(api_key=key_to_use)
+                        
+                        # Save uploaded file temporarily to process with Files API
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                            tmp_file.write(uploaded_pdf.getvalue())
+                            tmp_file_path = tmp_file.name
+
+                        # Upload file using Gemini Files API
+                        uploaded_file = client.files.upload(file=tmp_file_path)
+                        
+                        # Clean up local temp file
+                        os.unlink(tmp_file_path)
+
+                        prompt = """Analyze this document thoroughly and extract high-yield flashcards covering all key concepts, definitions, and formulas.
+                        Format EACH flashcard strictly on a new line using a pipe symbol:
+                        Front of Card (Question/Concept) | Back of Card (Answer/Explanation)
+                        Do not include markdown code block syntax around the output or extra commentary, just the raw text pairs."""
+
+                        response = client.models.generate_content(
+                            model="gemini-2.5-flash",
+                            contents=[uploaded_file, prompt]
+                        )
+
+                        ai_output = response.text.strip()
+                        anki_lines = []
+                        for line in ai_output.split("\n"):
+                            if "|" in line:
+                                anki_lines.append(line.strip())
+
+                        if anki_lines:
+                            final_data = "\n".join(anki_lines)
+                            st.success(f"Successfully extracted {len(anki_lines)} cards from your PDF!")
+                            st.download_button(
+                                label="📥 Download PDF Anki Deck (.txt)",
+                                data=final_data,
+                                file_name=filename if filename.endswith(".txt") else f"{filename}.txt",
+                                mime="text/plain",
+                                use_container_width=True
+                            )
+                        else:
+                            st.error("Could not parse flashcards from this PDF layout. Try a text-heavy PDF.")
+                    except Exception as e:
+                        st.error(f"Error processing document: {e}")
+
+    # 2. AI TEXT MODE
+    elif "AI Text" in mode:
+        raw_text = st.text_area("Paste Raw Study Content", height=180, placeholder="Paste your article or notes here...")
+        filename = st.text_input("Deck Filename", value="ai_text_deck.txt")
         
         if st.button("Generate Cards with AI ✨", type="primary"):
             key_to_use = api_key_input or (st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else None)
@@ -71,13 +133,12 @@ with main_col:
             elif not raw_text.strip():
                 st.warning("Please paste some text content first.")
             else:
-                with st.spinner("🤖 Gemini is analyzing text and building flashcards..."):
+                with st.spinner("🤖 Gemini is building flashcards..."):
                     try:
                         client = genai.Client(api_key=key_to_use)
-                        prompt = f"""You are an expert study assistant. Read the text below and extract high-yield flashcards.
+                        prompt = f"""Extract high-yield flashcards from the text below.
                         Format EACH flashcard strictly on a new line using a pipe symbol:
                         Front of Card (Question/Concept) | Back of Card (Answer/Explanation)
-                        Do not include extra headings or bullet symbols, just the raw pairs.
                         
                         Text content:
                         {raw_text[:12000]}"""
@@ -88,10 +149,7 @@ with main_col:
                         )
                         
                         ai_output = response.text.strip()
-                        anki_lines = []
-                        for line in ai_output.split("\n"):
-                            if "|" in line:
-                                anki_lines.append(line.strip())
+                        anki_lines = [line.strip() for line in ai_output.split("\n") if "|" in line]
                         
                         if anki_lines:
                             final_data = "\n".join(anki_lines)
@@ -104,38 +162,38 @@ with main_col:
                                 use_container_width=True
                             )
                         else:
-                            st.error("AI couldn't format the output properly. Try providing more structured text.")
+                            st.error("AI couldn't format the output properly.")
                     except Exception as e:
                         st.error(f"Generation error: {e}")
 
+    # 3. MANUAL PIPE MODE
     else:
-        notes = st.text_area("Input Manual Notes", value="What is Ohm's Law? | V = IR\nForce equals what? | Mass times acceleration", height=200)
+        notes = st.text_input("Input Manual Notes", value="What is Ohm's Law? | V = IR")
+        notes_area = st.text_area("", value="Force equals what? | Mass times acceleration", height=130)
         filename = st.text_input("Deck Filename", value="manual_deck.txt")
         
         if st.button("Generate Deck (.txt)", type="primary"):
-            if notes.strip():
-                lines = notes.strip().split("\n")
-                anki_lines = []
-                for line in lines:
-                    if "|" in line:
-                        parts = line.split("|", 1)
-                        anki_lines.append(f"{parts[0].strip()}\t{parts[1].strip()}")
-                
-                if anki_lines:
-                    output_data = "\n".join(anki_lines)
-                    st.success(f"Successfully formatted {len(anki_lines)} cards!")
-                    st.download_button(
-                        label="📥 Download .txt File",
-                        data=output_data,
-                        file_name=filename if filename.endswith(".txt") else f"{filename}.txt",
-                        mime="text/plain",
-                        use_container_width=True
-                    )
-                else:
-                    st.error("No valid pipe lines found. Use format: Front | Back")
+            combined_notes = f"{notes}\n{notes_area}"
+            lines = combined_notes.strip().split("\n")
+            anki_lines = []
+            for line in lines:
+                if "|" in line:
+                    parts = line.split("|", 1)
+                    anki_lines.append(f"{parts[0].strip()}\t{parts[1].strip()}")
+            
+            if anki_lines:
+                output_data = "\n".join(anki_lines)
+                st.success(f"Successfully formatted {len(anki_lines)} cards!")
+                st.download_button(
+                    label="📥 Download .txt File",
+                    data=output_data,
+                    file_name=filename if filename.endswith(".txt") else f"{filename}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
             else:
-                st.warning("Please enter your notes.")
+                st.error("No valid pipe lines found. Use format: Front | Back")
 
 with side_col:
-    st.markdown("#### 💡 Pro Tips")
-    st.info("With AI Mode enabled, you can paste full textbook chapters or PDF summaries and let Gemini handle the heavy lifting of question creation.")
+    st.markdown("#### 💡 PDF Pro Tips")
+    st.info("Gemini handles multi-page PDFs natively. You can upload a full chapter outline or summary booklet and turn the entire file into an Anki deck within seconds.")
