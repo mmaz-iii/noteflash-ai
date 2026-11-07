@@ -2,3 +2,5 @@ streamlit
 google-genai
 pandas
 genanki
+youtube-transcript-api
+Pillow
