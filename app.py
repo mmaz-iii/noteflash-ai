@@ -155,7 +155,7 @@ with main_col:
 
             if cards_data:
                 st.session_state['cards_df'] = pd.DataFrame(cards_data)
-                st.success(Successfully generated {len(cards_data)} flashcards!)
+                st.success(f"Successfully generated {len(cards_data)} flashcards!")
 
     # Interactive Card Editor Table & Preview
     if 'cards_df' in st.session_state and not st.session_state['cards_df'].empty:
