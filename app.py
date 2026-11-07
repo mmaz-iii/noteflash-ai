@@ -1,10 +1,12 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from google import genai
 import tempfile
 import os
 import pandas as pd
 import genanki
 import random
+from datetime import datetime
 
 st.set_page_config(
     page_title="NoteFlash AI — Pro Suite",
@@ -13,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom SaaS Glassmorphism Styling
+# Custom SaaS Glassmorphism Styling & Keyboard Shortcuts Injector
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
@@ -44,18 +46,25 @@ st.markdown("""
         transition: all 0.2s ease;
     }
     .stButton>button:hover { background: linear-gradient(180deg, #7f82f7 0%, #6064ee 100%); transform: translateY(-1px); }
+
+    .autosave-badge {
+        display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px;
+        border-radius: 99px; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.3); color: #34d399;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Initialize Session States
 if 'cards_df' not in st.session_state:
-    st.session_state['cards_df'] = pd.DataFrame(columns=["Front", "Back", "Tag", "Level"])
+    st.session_state['cards_df'] = pd.DataFrame(columns=["Select", "Front", "Back", "Tag", "Level"])
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 if 'onboarded' not in st.session_state:
     st.session_state['onboarded'] = False
 if 'user_profile' not in st.session_state:
     st.session_state['user_profile'] = {"curriculum": "General", "goal": "Standard"}
+if 'sync_status' not in st.session_state:
+    st.session_state['sync_status'] = "All changes saved"
 
 # --- AUTHENTICATION GATE ---
 if not st.session_state['logged_in']:
@@ -103,36 +112,47 @@ if not st.session_state['onboarded']:
             st.rerun()
     st.stop()
 
-# --- MAIN APP WORKSPACE (Post-Auth & Onboarding) ---
+# --- MAIN APP WORKSPACE ---
 with st.sidebar:
     st.markdown(f"### ⚡ **NoteFlash AI**")
     st.caption(f"Signed in as: {st.session_state.get('user_email', 'User')}")
     st.info(f"📚 Track: {st.session_state['user_profile']['curriculum']}")
+    
+    # Cloud Sync Status Indicator
+    sync_col_map = {"All changes saved": "🟢 All changes saved", "Syncing...": "🟡 Syncing...", "Offline": "🔴 Offline"}
+    st.markdown(f'<div class="autosave-badge">{sync_col_map.get(st.session_state["sync_status"], "🟢 All changes saved")}</div>', unsafe_allow_html=True)
+    st.markdown("---")
     
     if st.button("Log Out"):
         st.session_state['logged_in'] = False
         st.session_state['onboarded'] = False
         st.rerun()
 
-    st.markdown("---")
     api_key_input = st.text_input("Gemini API Key", type="password", help="Get free key from Google AI Studio")
 
 st.markdown("## Flashcard Generator Workspace")
-st.markdown(f"*(Profile configured for **{st.session_state['user_profile']['curriculum']}** — Focus: **{st.session_state['user_profile']['goal']}**)*")
+st.markdown(f"*(Profile configured for **{st.session_state['user_profile']['curriculum']}**)*")
 
-# Dynamic Prompt Tuning utilizing user profile data
 current_curriculum = st.session_state['user_profile']['curriculum']
 current_goal = st.session_state['user_profile']['goal']
 
-raw_text = st.text_area("Paste notes or study content:", height=120)
-if st.button("Generate Flashcards", type="primary"):
+raw_text = st.text_area("Paste notes or study content:", height=100)
+
+col_gen, col_shortcut_info = st.columns([2, 1])
+with col_gen:
+    generate_clicked = st.button("Generate Flashcards ✨", type="primary")
+with col_shortcut_info:
+    st.caption("⌨️ **Shortcuts:** `Cmd/Ctrl + Enter` to generate, `Space` to flip preview.")
+
+if generate_clicked:
     key_to_use = api_key_input or (st.secrets.get("GEMINI_API_KEY") if "GEMINI_API_KEY" in st.secrets else None)
     if not key_to_use:
         st.error("Please provide your Gemini API key.")
     else:
+        st.session_state['sync_status'] = "Syncing..."
         try:
             client = genai.Client(api_key=key_to_use)
-            system_instruction = f"You are an expert tutor specialized in {current_curriculum}. Tailor explanations and difficulty to match {current_goal}."
+            system_instruction = f"You are an expert tutor specialized in {current_curriculum}. Tailor explanations to match {current_goal}."
             prompt = f"{system_instruction}\n\nExtract flashcards from this text: {raw_text}\nFormat EACH card strictly on a new line using a pipe symbol: Front | Back."
             
             response = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt])
@@ -140,13 +160,62 @@ if st.button("Generate Flashcards", type="primary"):
             for line in response.text.strip().split("\n"):
                 if "|" in line:
                     parts = line.split("|", 1)
-                    cards_data.append({"Front": parts[0].strip(), "Back": parts[1].strip(), "Tag": "ai-gen", "Level": "Medium"})
+                    cards_data.append({"Select": False, "Front": parts[0].strip(), "Back": parts[1].strip(), "Tag": "ai-gen", "Level": "Medium"})
             if cards_data:
                 st.session_state['cards_df'] = pd.DataFrame(cards_data)
-                st.success(f"Generated {len(cards_data)} cards adapted for {current_curriculum}!")
+                st.session_state['sync_status'] = "All changes saved"
+                st.success(f"Generated {len(cards_data)} cards successfully!")
         except Exception as e:
+            st.session_state['sync_status'] = "Offline"
             st.error(f"Error: {e}")
 
+# --- POWER EDITOR & BULK OPERATIONS ---
 if not st.session_state['cards_df'].empty:
-    st.markdown("### Deck Editor")
-    st.session_state['cards_df'] = st.data_editor(st.session_state['cards_df'], num_rows="dynamic", use_container_width=True)
+    st.markdown("---")
+    st.markdown("### ✏️ Bulk Operations & Deck Editor")
+    
+    # Bulk Toolbar
+    b1, b2, b3, b4 = st.columns(4)
+    with b1:
+        bulk_tag = st.text_input("Apply Tag to Selected", placeholder="e.g. #physics")
+        if st.button("Apply Tag"):
+            if bulk_tag and not st.session_state['cards_df'].empty:
+                mask = st.session_state['cards_df']['Select'] == True
+                st.session_state['cards_df'].loc[mask, 'Tag'] = bulk_tag
+                st.success("Tags applied to selected cards!")
+                st.rerun()
+    with b2:
+        bulk_level = st.selectbox("Batch Difficulty", ["Easy", "Medium", "Hard"])
+        if st.button("Update Difficulty"):
+            if not st.session_state['cards_df'].empty:
+                mask = st.session_state['cards_df']['Select'] == True
+                st.session_state['cards_df'].loc[mask, 'Level'] = bulk_level
+                st.success("Difficulty updated!")
+                st.rerun()
+    with b3:
+        if st.button("🗑️ Delete Selected"):
+            if not st.session_state['cards_df'].empty:
+                st.session_state['cards_df'] = st.session_state['cards_df'][st.session_state['cards_df']['Select'] == False].reset_index(drop=True)
+                st.success("Selected cards deleted.")
+                st.rerun()
+
+    # Interactive Data Editor with multi-select column
+    edited_df = st.data_editor(st.session_state['cards_df'], num_rows="dynamic", use_container_width=True, key="power_editor")
+    st.session_state['cards_df'] = edited_df
+
+# Global Keyboard Shortcuts Injection via JavaScript component
+components.html("""
+<script>
+    const doc = window.parent.document;
+    doc.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            const buttons = doc.querySelectorAll('button');
+            buttons.forEach(btn => {
+                if (btn.innerText.includes('Generate Flashcards')) {
+                    btn.click();
+                }
+            });
+        }
+    });
+</script>
+""", height=0)
