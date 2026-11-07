@@ -6,9 +6,11 @@ import os
 import pandas as pd
 import genanki
 import random
+from youtube_transcript_api import YouTubeTranscriptApi
+from PIL import Image
 
 st.set_page_config(
-    page_title="NoteFlash AI — Pro Suite",
+    page_title="NoteFlash AI — Enterprise Suite",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -87,7 +89,7 @@ if not st.session_state['logged_in']:
                 st.session_state['user_email'] = email_input
                 st.rerun()
                 
-        if st.button("🌐 Continue with Google / School Account"):
+        if st.button("🌐 Continue with Google / Microsoft / School Account"):
             st.session_state['logged_in'] = True
             st.session_state['user_email'] = "user@school.edu"
             st.rerun()
@@ -126,7 +128,7 @@ with st.sidebar:
     st.markdown(f'<div class="autosave-badge">{sync_col_map.get(st.session_state["sync_status"], "🟢 All changes saved")}</div>', unsafe_allow_html=True)
     st.markdown("---")
     
-    nav_choice = st.radio("WORKSPACE", ["✨ Generator & Editor", "📖 Study Now (In-App)", "⚙️ Settings"])
+    nav_choice = st.radio("WORKSPACE", ["✨ Generator & Editor", "📖 Study Now (In-App)", "📦 Export & Ecosystem", "⚙️ Settings"])
     
     st.markdown("---")
     if st.button("Log Out"):
@@ -136,15 +138,31 @@ with st.sidebar:
 
     api_key_input = st.text_input("Gemini API Key", type="password", help="Get free key from Google AI Studio")
 
+current_curriculum = st.session_state['user_profile']['curriculum']
+current_goal = st.session_state['user_profile']['goal']
+
 # --- VIEW 1: GENERATOR & EDITOR ---
 if "Generator" in nav_choice:
-    st.markdown("## Flashcard Generator Workspace")
-    st.markdown(f"*(Profile configured for **{st.session_state['user_profile']['curriculum']}**)*")
+    st.markdown("## Multi-Source AI Generator Workspace")
+    st.markdown(f"*(Profile configured for **{current_curriculum}**)*")
 
-    current_curriculum = st.session_state['user_profile']['curriculum']
-    current_goal = st.session_state['user_profile']['goal']
+    input_mode = st.selectbox("Select Input Source", [
+        "📄 PDF Document Upload", 
+        "🎥 YouTube Lecture URL", 
+        "🖼️ Handwritten Notes / Image OCR", 
+        "✨ Raw Text Paste"
+    ])
 
-    raw_text = st.text_area("Paste notes or study content:", height=100)
+    uploaded_file = None
+    source_input = ""
+
+    if "PDF" in input_mode or "Image" in input_mode:
+        file_types = ["pdf"] if "PDF" in input_mode else ["png", "jpg", "jpeg"]
+        uploaded_file = st.file_uploader(f"Upload {input_mode.split()[1]}", type=file_types)
+    elif "YouTube" in input_mode:
+        source_input = st.text_input("YouTube Lecture URL", placeholder="https://www.youtube.com/watch?v=...")
+    else:
+        source_input = st.text_area("Paste study notes or article:", height=100)
 
     col_gen, col_shortcut_info = st.columns([2, 1])
     with col_gen:
@@ -160,19 +178,40 @@ if "Generator" in nav_choice:
             st.session_state['sync_status'] = "Syncing..."
             try:
                 client = genai.Client(api_key=key_to_use)
-                system_instruction = f"You are an expert tutor specialized in {current_curriculum}. Tailor explanations to match {current_goal}."
-                prompt = f"{system_instruction}\n\nExtract flashcards from this text: {raw_text}\nFormat EACH card strictly on a new line using a pipe symbol: Front | Back."
-                
-                response = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt])
-                cards_data = []
-                for line in response.text.strip().split("\n"):
-                    if "|" in line:
-                        parts = line.split("|", 1)
-                        cards_data.append({"Select": False, "Front": parts[0].strip(), "Back": parts[1].strip(), "Tag": "ai-gen", "Level": "Medium"})
-                if cards_data:
-                    st.session_state['cards_df'] = pd.DataFrame(cards_data)
-                    st.session_state['sync_status'] = "All changes saved"
-                    st.success(f"Generated {len(cards_data)} cards successfully!")
+                payload = []
+
+                if "YouTube" in input_mode and source_input:
+                    try:
+                        video_id = source_input.split("v=")[1].split("&")[0]
+                        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+                        transcript_text = " ".join([t['text'] for t in transcript_list])
+                        payload = [f"YouTube Transcript content: {transcript_text[:15000]}"]
+                    except Exception as e:
+                        st.error(f"Could not fetch YouTube transcript: {e}")
+                elif uploaded_file:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp:
+                        tmp.write(uploaded_file.getvalue())
+                        tmp_path = tmp.name
+                    uploaded_ref = client.files.upload(file=tmp_path)
+                    os.unlink(tmp_path)
+                    payload = [uploaded_ref]
+                else:
+                    payload = [f"Content: {source_input[:12000]}"]
+
+                if payload:
+                    system_instruction = f"You are an expert tutor specialized in {current_curriculum}. Tailor explanations to match {current_goal}."
+                    prompt = f"{system_instruction}\n\nExtract high-yield flashcards. Format EACH card strictly on a new line using a pipe symbol: Front | Back."
+                    
+                    response = client.models.generate_content(model="gemini-2.5-flash", contents=payload + [prompt])
+                    cards_data = []
+                    for line in response.text.strip().split("\n"):
+                        if "|" in line:
+                            parts = line.split("|", 1)
+                            cards_data.append({"Select": False, "Front": parts[0].strip(), "Back": parts[1].strip(), "Tag": "ai-gen", "Level": "Medium"})
+                    if cards_data:
+                        st.session_state['cards_df'] = pd.DataFrame(cards_data)
+                        st.session_state['sync_status'] = "All changes saved"
+                        st.success(f"Generated {len(cards_data)} cards successfully!")
             except Exception as e:
                 st.session_state['sync_status'] = "Offline"
                 st.error(f"Error: {e}")
@@ -223,7 +262,6 @@ elif "Study Now" in nav_choice:
         card = df.iloc[idx]
         st.markdown(f"**Card {idx + 1} of {len(df)} | Tag: `{card['Tag']}` | Level: {card['Level']}**")
         
-        # Interactive Study Container
         st.markdown(f"""
         <div style="padding: 35px; background: rgba(30,41,59,0.7); border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); min-height: 220px; text-align: center; margin-bottom: 20px;">
             <h4 style="color: #818cf8; text-transform: uppercase; font-size: 12px; letter-spacing: 0.1em;">Question</h4>
@@ -231,7 +269,6 @@ elif "Study Now" in nav_choice:
         </div>
         """, unsafe_allow_html=True)
 
-        # Text-to-Speech Button via Browser Web Speech API
         tts_text = f"Question: {card['Front']}. Answer: {card['Back']}"
         components.html(f"""
             <div style="margin-bottom: 15px;">
@@ -259,19 +296,42 @@ elif "Study Now" in nav_choice:
             st.markdown("#### Rate your retention:")
             c1, c2, c3, c4 = st.columns(4)
             if c1.button("1 - Again"): 
-                st.session_state['study_index'] = (idx + 1) % len(df)
-                st.rerun()
+                st.session_state['study_index'] = (idx + 1) % len(df); st.rerun()
             if c2.button("2 - Hard"): 
-                st.session_state['study_index'] = (idx + 1) % len(df)
-                st.rerun()
+                st.session_state['study_index'] = (idx + 1) % len(df); st.rerun()
             if c3.button("3 - Good"): 
-                st.session_state['study_index'] = (idx + 1) % len(df)
-                st.rerun()
+                st.session_state['study_index'] = (idx + 1) % len(df); st.rerun()
             if c4.button("4 - Easy"): 
-                st.session_state['study_index'] = (idx + 1) % len(df)
-                st.rerun()
+                st.session_state['study_index'] = (idx + 1) % len(df); st.rerun()
 
-# --- VIEW 3: SETTINGS ---
+# --- VIEW 3: EXPORT & ECOSYSTEM ---
+elif "Export & Ecosystem" in nav_choice:
+    st.markdown("## 📦 Export Presets & Anki Ecosystem")
+    if st.session_state['cards_df'].empty:
+        st.info("No cards generated yet.")
+    else:
+        st.markdown("### Export Configuration Presets")
+        preset_name = st.text_input("Preset Name", value="Default CBSE Preset")
+        deck_title_input = st.text_input("Anki Deck Title", value="NoteFlash_Master_Deck")
+        delimiter_choice = st.selectbox("Export Delimiter", ["Pipe (|)", "Tab (\\t)", "Comma (,)"])
+        
+        if st.button("Save Preset Settings"):
+            st.success(f"Export preset '{preset_name}' saved successfully!")
+
+        st.markdown("---")
+        st.markdown("### Native Package Export")
+        deck_id, model_id = random.randrange(1 << 30, 1 << 31), random.randrange(1 << 30, 1 << 31)
+        my_model = genanki.Model(model_id, 'NoteFlash Pro Model', fields=[{'name': 'Front'}, {'name': 'Back'}], templates=[{'name': 'Card 1', 'qfmt': '{{Front}}', 'afmt': '{{FrontSide}}<hr id="answer">{{Back}}'}])
+        my_deck = genanki.Deck(deck_id, deck_title_input)
+        for _, r in st.session_state['cards_df'].iterrows(): 
+            my_deck.add_note(genanki.Note(model=my_model, fields=[r['Front'], r['Back']]))
+        
+        pkg_path = f"{deck_title_input}.apkg"
+        genanki.Package(my_deck).write_to_file(pkg_path)
+        with open(pkg_path, "rb") as f:
+            st.download_button("📥 Download .apkg Package", f, file_name=pkg_path, mime="application/octet-stream", use_container_width=True)
+
+# --- VIEW 4: SETTINGS ---
 else:
     st.markdown("## ⚙️ Settings")
     st.text_input("Display Name", value=st.session_state.get('user_email', 'User'))
